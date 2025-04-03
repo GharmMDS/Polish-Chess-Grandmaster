@@ -49,18 +49,30 @@ def fetch_games_data(archive_url):
 
 
 def extract_date_from_pgn(pgn):
-    """Extracts the date (YYYY-MM-DD) from the PGN."""
-    date_match = re.search(r'\[Date "(\d{4}\.\d{2}\.\d{2})"\]', pgn)
+    """Extracts the date (YYYY-MM-DD) from the PGN, handling case and varying digit counts."""
+    # Case-insensitive search for Date tag, allowing single or double digits for month/day
+    date_match = re.search(
+        r'\[Date "(\d{4}\.\d{1,2}\.\d{1,2})"\]', 
+        pgn, 
+        re.IGNORECASE
+    )
     if date_match:
+        date_str = date_match.group(1)
         try:
-            date_str = date_match.group(1)
+            # Parse date even if parts have single digits (e.g., 2023.5.7)
             date_obj = datetime.datetime.strptime(date_str, '%Y.%m.%d').date()
+            logging.info(f"Extracted date from PGN: {date_obj}")
             return date_obj.strftime('%Y-%m-%d')
         except ValueError as e:
-            logging.warning(f"Invalid date format in PGN: {e}")
-    logging.warning("No valid date found in PGN, defaulting to '1900-01-01'.")
-    return '1900-01-01'  # Default date if not found
-
+            logging.warning(f"Invalid date '{date_str}' in PGN: {e}")
+            # Fallback to default date if parsing fails
+    else:
+        logging.warning("No Date tag found in PGN.")
+    
+    # Return a sensible default date instead of '2015-05-05'
+    default_date = '1900-01-01'
+    logging.warning(f"Defaulting to {default_date}")
+    return default_date
 
 def get_existing_game_ids():
     """Fetches existing game IDs from the database."""
@@ -99,9 +111,12 @@ def process_games():
                 white = game["white"]
                 black = game["black"]
                 winner = white["username"] if white["result"] == "win" else black["username"]
-                date_time = extract_date_from_pgn(game["pgn"])
+                date_time = extract_date_from_pgn(game["pgn"])  # Ensure date_time is being extracted correctly
 
-                # Construct the game data, excluding `end_time` since it's not needed
+                # Log to make sure date_time is not null before insertion
+                logging.info(f"Date extracted for game {game_id}: {date_time}")
+
+                # Construct the game data
                 game_data = {
                     "game_id": game_id,
                     "white_player_id": white["username"],
@@ -114,7 +129,7 @@ def process_games():
                     "pgn": game["pgn"],
                     "start_time": datetime.datetime.fromtimestamp(game["end_time"]).strftime('%Y-%m-%d %H:%M:%S') if game.get("end_time") else None,
                     "winner": winner,
-                    "date_time": date_time
+                    "date_time": date_time  # Ensure date_time is assigned here
                 }
 
                 new_games.append(game_data)
@@ -125,6 +140,10 @@ def process_games():
         time.sleep(1)  # Rate limit delay
 
     if new_games:
+        # Log the number of new games before insertion
+        logging.info(f"Inserting {len(new_games)} new games into the database.")
+        
+        # Using to_sql method for simplicity here:
         df = pd.DataFrame(new_games)
         try:
             df.to_sql('games', engine, if_exists='append', index=False)
@@ -135,6 +154,8 @@ def process_games():
             logging.error(f"Unexpected error inserting games: {e}")
     else:
         logging.warning("No new games to insert.")
+
+
 
 
 

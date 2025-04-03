@@ -1,0 +1,109 @@
+import requests
+import pandas as pd
+import datetime
+import logging
+import re
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+# Chess.com API settings
+PLAYER = "hikaru"
+ARCHIVES_URL = f"https://api.chess.com/pub/player/{PLAYER}/games/archives"
+
+# Create an API session
+session = requests.Session()
+session.headers.update({'User-Agent': 'QueenIsBeautiful (your_email@example.com)'})
+
+
+def fetch_all_game_urls():
+    """Fetches all archive URLs for the player."""
+    try:
+        response = session.get(ARCHIVES_URL)
+        response.raise_for_status()
+        archives = response.json().get("archives", [])
+        logging.info(f"Found {len(archives)} archives for player {PLAYER}")
+        return archives
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Failed to fetch archives: {e}")
+        return []
+
+
+def fetch_games_data(archive_url):
+    """Fetches game data from a single archive."""
+    try:
+        response = session.get(archive_url)
+        response.raise_for_status()
+        return response.json().get("games", [])
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error fetching games from {archive_url}: {e}")
+        return []
+
+
+def extract_date_from_pgn(pgn):
+    """Extracts the date (YYYY-MM-DD) from the PGN, handling case and varying digit counts."""
+    # Case-insensitive search for Date tag, allowing single or double digits for month/day
+    date_match = re.search(
+        r'\[Date "(\d{4}\.\d{1,2}\.\d{1,2})"\]', 
+        pgn, 
+        re.IGNORECASE
+    )
+    if date_match:
+        date_str = date_match.group(1)
+        try:
+            # Parse date even if parts have single digits (e.g., 2023.5.7)
+            date_obj = datetime.datetime.strptime(date_str, '%Y.%m.%d').date()
+            return date_obj.strftime('%Y-%m-%d')
+        except ValueError as e:
+            logging.warning(f"Invalid date '{date_str}' in PGN: {e}")
+            # Fallback to default date if parsing fails
+    else:
+        logging.warning("No Date tag found in PGN.")
+    
+    # Return a sensible default date instead of '1900-01-01'
+    default_date = '1900-01-01'
+    logging.warning(f"Defaulting to {default_date}")
+    return default_date
+
+
+def save_dates_to_file():
+    """Fetches, processes games, and saves only extracted dates to a CSV file."""
+    all_games_urls = fetch_all_game_urls()
+    if not all_games_urls:
+        logging.warning("No game archives found.")
+        return
+
+    dates = []  # To store extracted dates
+
+    for games_url in all_games_urls:
+        logging.info(f"Fetching games from {games_url}...")
+        games_data = fetch_games_data(games_url)
+
+        for game in games_data:
+            try:
+                if "pgn" not in game:
+                    continue  # Skip games without PGN
+
+                # Extract the date from PGN
+                date_time = extract_date_from_pgn(game["pgn"])
+
+                # Store the game ID and extracted date
+                dates.append({
+                    "game_id": game.get("uuid", game["url"].split("/")[-1]),
+                    "date_time": date_time
+                })
+
+            except KeyError as e:
+                logging.warning(f"Skipping game due to missing key: {e}")
+
+    # Save extracted dates to a CSV file
+    if dates:
+        df = pd.DataFrame(dates)
+        df.to_csv('extracted_dates.csv', index=False)
+        logging.info(f"Saved {len(dates)} dates to 'extracted_dates.csv'.")
+    else:
+        logging.warning("No dates extracted.")
+
+
+if __name__ == "__main__":
+    save_dates_to_file()
