@@ -58,7 +58,8 @@ def extract_date_from_pgn(pgn):
             return date_obj.strftime('%Y-%m-%d')
         except ValueError as e:
             logging.warning(f"Invalid date format in PGN: {e}")
-    return None  # If no date found
+    logging.warning("No valid date found in PGN, defaulting to '1900-01-01'.")
+    return '1900-01-01'  # Default date if not found
 
 
 def get_existing_game_ids():
@@ -68,6 +69,8 @@ def get_existing_game_ids():
     except Exception as e:
         logging.error(f"Error fetching existing game IDs: {e}")
         return []
+
+
 
 
 def process_games():
@@ -98,7 +101,8 @@ def process_games():
                 winner = white["username"] if white["result"] == "win" else black["username"]
                 date_time = extract_date_from_pgn(game["pgn"])
 
-                new_games.append({
+                # Construct the game data, excluding `end_time` since it's not needed
+                game_data = {
                     "game_id": game_id,
                     "white_player_id": white["username"],
                     "black_player_id": black["username"],
@@ -108,10 +112,12 @@ def process_games():
                     "time_control": game["time_control"],
                     "rules": game["rules"],
                     "pgn": game["pgn"],
-                    "start_time": datetime.datetime.fromtimestamp(game["end_time"]).strftime('%Y-%m-%d %H:%M:%S'),
+                    "start_time": datetime.datetime.fromtimestamp(game["end_time"]).strftime('%Y-%m-%d %H:%M:%S') if game.get("end_time") else None,
                     "winner": winner,
                     "date_time": date_time
-                })
+                }
+
+                new_games.append(game_data)
 
             except KeyError as e:
                 logging.warning(f"Skipping game due to missing key: {e}")
@@ -129,6 +135,7 @@ def process_games():
             logging.error(f"Unexpected error inserting games: {e}")
     else:
         logging.warning("No new games to insert.")
+
 
 
 if __name__ == "__main__":
