@@ -3,6 +3,7 @@ from sqlalchemy import create_engine
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+import re
 
 # Database connection
 DB_URL = "postgresql://postgres:gharm@localhost:5432/chess_data"
@@ -21,6 +22,53 @@ WHERE white_player_id = 'hikaru' OR black_player_id = 'hikaru'
 """
 
 df_hikaru = pd.read_sql(query_hikaru, engine)
+import pandas as pd
+from sqlalchemy import create_engine
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+import re
+
+# Database connection
+DB_URL = "postgresql://postgres:gharm@localhost:5432/chess_data"
+engine = create_engine(DB_URL)
+
+# Modified query to include the winner and date_time
+query_hikaru = """
+SELECT 
+    white_player_id, 
+    white_rating, 
+    black_player_id, 
+    black_rating,
+    winner,
+    date_time  -- Use date_time instead of end_time
+FROM games
+WHERE white_player_id = 'hikaru' OR black_player_id = 'hikaru'
+"""
+
+df_hikaru = pd.read_sql(query_hikaru, engine)
+
+# Convert date_time to datetime
+df_hikaru['date_time'] = pd.to_datetime(df_hikaru['date_time'])  # Use date_time
+
+# Sort by date_time
+df_hikaru = df_hikaru.sort_values(by='date_time')  # Use date_time
+
+# Add Hikaru's rating column
+df_hikaru['hikaru_rating'] = df_hikaru.apply(
+    lambda row: row['white_rating'] if row['white_player_id'] == 'hikaru' else row['black_rating'],
+    axis=1
+)
+
+# Plot Hikaru's rating over time
+plt.figure(figsize=(14, 7))
+plt.plot(df_hikaru['date_time'], df_hikaru['hikaru_rating'], marker='o', linestyle='-', color='b')  # Use date_time
+plt.title("Hikaru's Rating Over Time")
+plt.xlabel("Date Time")  # Use Date Time
+plt.ylabel("Hikaru's Rating")
+plt.grid(True)
+plt.tight_layout()
+plt.show()
 
 # Check the first few rows of the dataframe
 print(df_hikaru.head())
@@ -33,8 +81,9 @@ total_hikaru_games = len(df_hikaru)
 
 # Count the number of games Hikaru won
 hikaru_wins = df_hikaru.apply(
-    lambda row: 1 if (row['winner'] == 'hikaru') else 0, axis=1
+    lambda row: 1 if str(row['winner']).lower() == 'hikaru' else 0, axis=1
 ).sum()
+print(f"Hikaru's wins: {hikaru_wins}")
 
 # Calculate Hikaru's win rate
 hikaru_win_rate = hikaru_wins / total_hikaru_games if total_hikaru_games > 0 else 0
@@ -62,17 +111,30 @@ axes[1].set_ylabel("Frequency")
 plt.tight_layout()
 plt.show()
 
-# Add a 'win' column based on the actual game result for White and Black separately
+import pandas as pd
+
+def calculate_hikaru_wins(row):
+    """Calculates if Hikaru won based on white/black player and winner."""
+    if pd.notna(row['winner']) and str(row['winner']).lower() == 'hikaru':
+        if row['white_player_id'].lower() == 'hikaru':
+            return 1  # Hikaru won as white
+        elif row['black_player_id'].lower() == 'hikaru':
+            return 1  # Hikaru won as black
+    return 0  # Hikaru did not win
+
+# Apply the function to create the 'win' column
+df_hikaru['win'] = df_hikaru.apply(calculate_hikaru_wins, axis=1)
+
+# Separate wins based on white/black
 df_hikaru['win_white'] = df_hikaru.apply(
-    lambda row: 1 if (row['white_player_id'] == 'hikaru' and row['winner'] == 'hikaru') else 0,
+    lambda row: 1 if row['white_player_id'].lower() == 'hikaru' and row['win'] == 1 else 0,
     axis=1
 )
 
 df_hikaru['win_black'] = df_hikaru.apply(
-    lambda row: 1 if (row['black_player_id'] == 'hikaru' and row['winner'] == 'hikaru') else 0,
+    lambda row: 1 if row['black_player_id'].lower() == 'hikaru' and row['win'] == 1 else 0,
     axis=1
 )
-
 # Overall win count
 total_wins = df_hikaru['win_white'].sum() + df_hikaru['win_black'].sum()
 
@@ -112,92 +174,92 @@ axes[1].legend()
 plt.tight_layout()
 plt.show()
 
-# Compare Win Rate for White and Black separately
-fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+# # Compare Win Rate for White and Black separately
+# fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
-# Plot for Hikaru's win rate when playing as White
-win_rate_white = df_hikaru['win_white'].mean()
-axes[0].bar(['White'], [win_rate_white], color='blue')
-axes[0].set_title("Hikaru's Win Rate as White Player")
-axes[0].set_ylabel("Win Rate")
-axes[0].set_ylim(0, 1)
+# # Plot for Hikaru's win rate when playing as White
+# win_rate_white = df_hikaru['win_white'].mean()
+# axes[0].bar(['White'], [win_rate_white], color='blue')
+# axes[0].set_title("Hikaru's Win Rate as White Player")
+# axes[0].set_ylabel("Win Rate")
+# axes[0].set_ylim(0, 1)
 
-# Plot for Hikaru's win rate when playing as Black
-win_rate_black = df_hikaru['win_black'].mean()
-axes[1].bar(['Black'], [win_rate_black], color='red')
-axes[1].set_title("Hikaru's Win Rate as Black Player")
-axes[1].set_ylabel("Win Rate")
-axes[1].set_ylim(0, 1)
+# # Plot for Hikaru's win rate when playing as Black
+# win_rate_black = df_hikaru['win_black'].mean()
+# axes[1].bar(['Black'], [win_rate_black], color='red')
+# axes[1].set_title("Hikaru's Win Rate as Black Player")
+# axes[1].set_ylabel("Win Rate")
+# axes[1].set_ylim(0, 1)
 
-# Adjust layout
-plt.tight_layout()
-plt.show()
+# # Adjust layout
+# plt.tight_layout()
+# plt.show()
 
-query = """
-SELECT 
-    white_player_id, 
-    white_rating, 
-    black_player_id, 
-    black_rating, 
-    time_control, 
-    end_time,
-    pgn
-FROM games
-WHERE white_player_id = 'hikaru' OR black_player_id = 'hikaru'
-"""
+# query = """
+# SELECT 
+#     white_player_id, 
+#     white_rating, 
+#     black_player_id, 
+#     black_rating, 
+#     time_control, 
+#     end_time,
+#     pgn
+# FROM games
+# WHERE white_player_id = 'hikaru' OR black_player_id = 'hikaru'
+# """
 
-df = pd.read_sql(query, engine)
+# df = pd.read_sql(query, engine)
 
-# Filter the data for games where Hikaru is either white or black
-df_hikaru = df[(df['white_player_id'] == 'hikaru') | (df['black_player_id'] == 'hikaru')]
+# # Filter the data for games where Hikaru is either white or black
+# df_hikaru = df[(df['white_player_id'] == 'hikaru') | (df['black_player_id'] == 'hikaru')]
 
-# Add a 'win' column based on the actual game result for White and Black separately
-df_hikaru['win_white'] = df_hikaru.apply(
-    lambda row: 1 if row['white_player_id'] == 'hikaru' and row['white_rating'] > row['black_rating'] else 0,
-    axis=1
-)
+# # Add a 'win' column based on the actual game result for White and Black separately
+# df_hikaru['win_white'] = df_hikaru.apply(
+#     lambda row: 1 if row['white_player_id'] == 'hikaru' and row['white_rating'] > row['black_rating'] else 0,
+#     axis=1
+# )
 
-df_hikaru['win_black'] = df_hikaru.apply(
-    lambda row: 1 if row['black_player_id'] == 'hikaru' and row['black_rating'] > row['white_rating'] else 0,
-    axis=1
-)
+# df_hikaru['win_black'] = df_hikaru.apply(
+#     lambda row: 1 if row['black_player_id'] == 'hikaru' and row['black_rating'] > row['white_rating'] else 0,
+#     axis=1
+# )
 
-# Overall win rate for Hikaru across all games
-overall_win_rate = (df_hikaru['win_white'].sum() + df_hikaru['win_black'].sum()) / len(df_hikaru)
-print(f"Hikaru's overall win rate: {overall_win_rate * 100:.2f}%")
+# # Overall win rate for Hikaru across all games
+# overall_win_rate = (df_hikaru['win_white'].sum() + df_hikaru['win_black'].sum()) / len(df_hikaru)
+# print(f"Hikaru's overall win rate: {overall_win_rate * 100:.2f}%")
 
-# 1. Time Control Distribution (Rating vs Time Control)
-plt.figure(figsize=(10, 6))
-sns.boxplot(data=df_hikaru, x='time_control', y='white_rating') # corrected boxplot.
-plt.title("Hikaru's Rating Distribution by Time Control")
-plt.xlabel("Time Control")
-plt.ylabel("Rating")
-plt.xticks(rotation=45)
-plt.tight_layout()
-plt.show()
+# # 1. Time Control Distribution (Rating vs Time Control)
+# plt.figure(figsize=(10, 6))
+# sns.boxplot(data=df_hikaru, x='time_control', y='white_rating') # corrected boxplot.
+# plt.title("Hikaru's Rating Distribution by Time Control")
+# plt.xlabel("Time Control")
+# plt.ylabel("Rating")
+# plt.xticks(rotation=45)
+# plt.tight_layout()
+# plt.show()
 
-# 3. Opponent Ratings Comparison - Heatmap of Wins vs Opponent Ratings
-df_hikaru['opponent_rating'] = np.where(df_hikaru['white_player_id'] == 'hikaru', df_hikaru['black_rating'], df_hikaru['white_rating'])
-df_hikaru['win'] = np.where(df_hikaru['win_white'] == 1, 1, 0)
-df_hikaru['win'] = np.where(df_hikaru['win_black'] == 1, 1, df_hikaru['win'])
+# # 3. Opponent Ratings Comparison - Heatmap of Wins vs Opponent Ratings
+# df_hikaru['opponent_rating'] = np.where(df_hikaru['white_player_id'] == 'hikaru', df_hikaru['black_rating'], df_hikaru['white_rating'])
+# df_hikaru['win'] = np.where(df_hikaru['win_white'] == 1, 1, 0)
+# df_hikaru['win'] = np.where(df_hikaru['win_black'] == 1, 1, df_hikaru['win'])
 
-# Group by opponent ratings and calculate the win rate
-opponent_rating_win_rate = df_hikaru.groupby('opponent_rating')['win'].mean().reset_index()
+# # Group by opponent ratings and calculate the win rate
+# opponent_rating_win_rate = df_hikaru.groupby('opponent_rating')['win'].mean().reset_index()
 
-# Create a heatmap of opponent ratings vs win rate
-heatmap_data = opponent_rating_win_rate.pivot_table(values='win', index='opponent_rating', columns='win', aggfunc='mean')
+# # Create a heatmap of opponent ratings vs win rate
+# heatmap_data = opponent_rating_win_rate.pivot_table(values='win', index='opponent_rating', columns='win', aggfunc='mean')
 
-# Check if heatmap_data is empty before plotting
-if not heatmap_data.empty:
-    plt.figure(figsize=(10, 6))
-    sns.heatmap(heatmap_data, annot=True, cmap='Blues', fmt='.2f', linewidths=0.5)
-    plt.title("Opponent Rating vs Win Rate Heatmap")
-    plt.xlabel("Win Rate")
-    plt.ylabel("Opponent Rating")
-    plt.tight_layout()
-    plt.show()
-else:
-    print("Heatmap data is empty. Skipping heatmap plot.")
+# # Check if heatmap_data is empty before plotting
+# if not heatmap_data.empty:
+#     plt.figure(figsize=(10, 6))
+#     sns.heatmap(heatmap_data, annot=True, cmap='Blues', fmt='.2f', linewidths=0.5)
+#     plt.title("Opponent Rating vs Win Rate Heatmap")
+#     plt.xlabel("Win Rate")
+#     plt.ylabel("Opponent Rating")
+#     plt.tight_layout()
+#     plt.show()
+# else:
+#     print("Heatmap data is empty. Skipping heatmap plot.")
 
 # # 4. Performance by Opening
 # # We need to extract the opening from the PGN data (if available). Let's assume the PGN contains opening information.
