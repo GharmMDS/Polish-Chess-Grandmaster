@@ -1,178 +1,184 @@
-import pandas as pd
-from sqlalchemy import create_engine
-import matplotlib.pyplot as plt
-import seaborn as sns
-import numpy as np
-import re
+# import pandas as pd
+# from sqlalchemy import create_engine
+# import matplotlib.pyplot as plt
+# import seaborn as sns
+# import numpy as np
+# import re
+# import sys
 
-# Database connection
-DB_URL = "postgresql://postgres:gharm@localhost:5432/chess_data"
-engine = create_engine(DB_URL)
 
-# Modified query to include the winner
-query_hikaru = """
-SELECT 
-    white_player_id, 
-    white_rating, 
-    black_player_id, 
-    black_rating,
-    winner
-FROM games
-WHERE white_player_id = 'hikaru' OR black_player_id = 'hikaru'
-"""
+# # Database connection
+# DB_URL = "postgresql://postgres:gharm@localhost:5432/chess_data"
+# engine = create_engine(DB_URL)
 
-df_hikaru = pd.read_sql(query_hikaru, engine)
-import pandas as pd
-from sqlalchemy import create_engine
-import matplotlib.pyplot as plt
-import seaborn as sns
-import numpy as np
-import re
+# # Get player from command-line or fallback
+# PLAYER_NAME = sys.argv[1] if len(sys.argv) > 1 else 'hikaru'
 
-# Database connection
-DB_URL = "postgresql://postgres:gharm@localhost:5432/chess_data"
-engine = create_engine(DB_URL)
+# query = f"""
+# SELECT 
+#     white_player_id, 
+#     white_rating, 
+#     black_player_id, 
+#     black_rating,
+#     winner,
+#     date_time
+# FROM games
+# WHERE white_player_id = '{PLAYER_NAME}' OR black_player_id = '{PLAYER_NAME}'
+# """
 
-# Modified query to include the winner and date_time
-query_hikaru = """
-SELECT 
-    white_player_id, 
-    white_rating, 
-    black_player_id, 
-    black_rating,
-    winner,
-    date_time  -- Use date_time instead of end_time
-FROM games
-WHERE white_player_id = 'hikaru' OR black_player_id = 'hikaru'
-"""
 
-df_hikaru = pd.read_sql(query_hikaru, engine)
+# df_hikaru = pd.read_sql(query, engine)
+# import pandas as pd
+# from sqlalchemy import create_engine
+# import matplotlib.pyplot as plt
+# import seaborn as sns
+# import numpy as np
+# import re
 
-# Convert date_time to datetime
-df_hikaru['date_time'] = pd.to_datetime(df_hikaru['date_time'])  # Use date_time
+# # Database connection
+# DB_URL = "postgresql://postgres:gharm@localhost:5432/chess_data"
+# engine = create_engine(DB_URL)
 
-# Sort by date_time
-df_hikaru = df_hikaru.sort_values(by='date_time')  # Use date_time
+# # Modified query to include the winner and date_time
+# query_hikaru = """
+# SELECT 
+#     white_player_id, 
+#     white_rating, 
+#     black_player_id, 
+#     black_rating,
+#     winner,
+#     date_time  -- Use date_time instead of end_time
+# FROM games
+# WHERE white_player_id = 'hikaru' OR black_player_id = 'hikaru'
+# """
 
-# Add Hikaru's rating column
-df_hikaru['hikaru_rating'] = df_hikaru.apply(
-    lambda row: row['white_rating'] if row['white_player_id'] == 'hikaru' else row['black_rating'],
-    axis=1
-)
+# df_hikaru = pd.read_sql(query_hikaru, engine)
 
-# Plot Hikaru's rating over time
-plt.figure(figsize=(14, 7))
-plt.plot(df_hikaru['date_time'], df_hikaru['hikaru_rating'], marker='o', linestyle='-', color='b')  # Use date_time
-plt.title("Hikaru's Rating Over Time")
-plt.xlabel("Date Time")  # Use Date Time
-plt.ylabel("Hikaru's Rating")
-plt.grid(True)
-plt.tight_layout()
-plt.show()
+# # Convert date_time to datetime
+# df_hikaru['date_time'] = pd.to_datetime(df_hikaru['date_time'])  # Use date_time
 
-# Check the first few rows of the dataframe
-print(df_hikaru.head())
+# # Sort by date_time
+# df_hikaru = df_hikaru.sort_values(by='date_time')  # Use date_time
 
-# Check unique values in the 'winner' column
-print("Unique values in 'winner' column:", df_hikaru['winner'].unique())
+# # Add Hikaru's rating column
+# df_hikaru['hikaru_rating'] = df_hikaru.apply(
+#     lambda row: row['white_rating'] if row['white_player_id'] == 'hikaru' else row['black_rating'],
+#     axis=1
+# )
 
-# Count the number of games Hikaru played
-total_hikaru_games = len(df_hikaru)
+# # Plot Hikaru's rating over time
+# plt.figure(figsize=(14, 7))
+# plt.plot(df_hikaru['date_time'], df_hikaru['hikaru_rating'], marker='o', linestyle='-', color='b')  # Use date_time
+# plt.title("Hikaru's Rating Over Time")
+# plt.xlabel("Date Time")  # Use Date Time
+# plt.ylabel("Hikaru's Rating")
+# plt.grid(True)
+# plt.tight_layout()
+# plt.show()
 
-# Count the number of games Hikaru won
-hikaru_wins = df_hikaru.apply(
-    lambda row: 1 if str(row['winner']).lower() == 'hikaru' else 0, axis=1
-).sum()
-print(f"Hikaru's wins: {hikaru_wins}")
+# # Check the first few rows of the dataframe
+# print(df_hikaru.head())
 
-# Calculate Hikaru's win rate
-hikaru_win_rate = hikaru_wins / total_hikaru_games if total_hikaru_games > 0 else 0
+# # Check unique values in the 'winner' column
+# print("Unique values in 'winner' column:", df_hikaru['winner'].unique())
 
-print(f"Total games Hikaru played: {total_hikaru_games}")
-print(f"Hikaru's wins: {hikaru_wins}")
-print(f"Hikaru's win rate: {hikaru_win_rate * 100:.2f}%")
+# # Count the number of games Hikaru played
+# total_hikaru_games = len(df_hikaru)
 
-# Create two subplots: one for white player ratings, another for black player ratings
-fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+# # Count the number of games Hikaru won
+# hikaru_wins = df_hikaru.apply(
+#     lambda row: 1 if str(row['winner']).lower() == 'hikaru' else 0, axis=1
+# ).sum()
+# print(f"Hikaru's wins: {hikaru_wins}")
 
-# Plot for Hikaru's rating as White
-sns.histplot(df_hikaru['white_rating'], kde=True, ax=axes[0], color='blue', bins=30, alpha=0.7)
-axes[0].set_title("Hikaru's Rating as White Player")
-axes[0].set_xlabel("Rating")
-axes[0].set_ylabel("Frequency")
+# # Calculate Hikaru's win rate
+# hikaru_win_rate = hikaru_wins / total_hikaru_games if total_hikaru_games > 0 else 0
 
-# Plot for Hikaru's rating as Black
-sns.histplot(df_hikaru['black_rating'], kde=True, ax=axes[1], color='red', bins=30, alpha=0.7)
-axes[1].set_title("Hikaru's Rating as Black Player")
-axes[1].set_xlabel("Rating")
-axes[1].set_ylabel("Frequency")
+# print(f"Total games Hikaru played: {total_hikaru_games}")
+# print(f"Hikaru's wins: {hikaru_wins}")
+# print(f"Hikaru's win rate: {hikaru_win_rate * 100:.2f}%")
 
-# Adjust layout
-plt.tight_layout()
-plt.show()
+# # Create two subplots: one for white player ratings, another for black player ratings
+# fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
-import pandas as pd
+# # Plot for Hikaru's rating as White
+# sns.histplot(df_hikaru['white_rating'], kde=True, ax=axes[0], color='blue', bins=30, alpha=0.7)
+# axes[0].set_title("Hikaru's Rating as White Player")
+# axes[0].set_xlabel("Rating")
+# axes[0].set_ylabel("Frequency")
 
-def calculate_hikaru_wins(row):
-    """Calculates if Hikaru won based on white/black player and winner."""
-    if pd.notna(row['winner']) and str(row['winner']).lower() == 'hikaru':
-        if row['white_player_id'].lower() == 'hikaru':
-            return 1  # Hikaru won as white
-        elif row['black_player_id'].lower() == 'hikaru':
-            return 1  # Hikaru won as black
-    return 0  # Hikaru did not win
+# # Plot for Hikaru's rating as Black
+# sns.histplot(df_hikaru['black_rating'], kde=True, ax=axes[1], color='red', bins=30, alpha=0.7)
+# axes[1].set_title("Hikaru's Rating as Black Player")
+# axes[1].set_xlabel("Rating")
+# axes[1].set_ylabel("Frequency")
 
-# Apply the function to create the 'win' column
-df_hikaru['win'] = df_hikaru.apply(calculate_hikaru_wins, axis=1)
+# # Adjust layout
+# plt.tight_layout()
+# plt.show()
 
-# Separate wins based on white/black
-df_hikaru['win_white'] = df_hikaru.apply(
-    lambda row: 1 if row['white_player_id'].lower() == 'hikaru' and row['win'] == 1 else 0,
-    axis=1
-)
+# import pandas as pd
 
-df_hikaru['win_black'] = df_hikaru.apply(
-    lambda row: 1 if row['black_player_id'].lower() == 'hikaru' and row['win'] == 1 else 0,
-    axis=1
-)
-# Overall win count
-total_wins = df_hikaru['win_white'].sum() + df_hikaru['win_black'].sum()
+# def calculate_hikaru_wins(row):
+#     """Calculates if Hikaru won based on white/black player and winner."""
+#     if pd.notna(row['winner']) and str(row['winner']).lower() == 'hikaru':
+#         if row['white_player_id'].lower() == 'hikaru':
+#             return 1  # Hikaru won as white
+#         elif row['black_player_id'].lower() == 'hikaru':
+#             return 1  # Hikaru won as black
+#     return 0  # Hikaru did not win
 
-# Calculate the win rate relative to total games Hikaru played.
-overall_win_rate = total_wins / total_hikaru_games if total_hikaru_games > 0 else 0
+# # Apply the function to create the 'win' column
+# df_hikaru['win'] = df_hikaru.apply(calculate_hikaru_wins, axis=1)
 
-print(f"Hikaru's total wins: {total_wins}")
-print(f"Hikaru's overall win rate: {overall_win_rate * 100:.2f}%")
+# # Separate wins based on white/black
+# df_hikaru['win_white'] = df_hikaru.apply(
+#     lambda row: 1 if row['white_player_id'].lower() == 'hikaru' and row['win'] == 1 else 0,
+#     axis=1
+# )
 
-# Separate dataframes for wins and losses for White and Black
-df_hikaru_win_white = df_hikaru[df_hikaru['win_white'] == 1]
-df_hikaru_loss_white = df_hikaru[df_hikaru['win_white'] == 0]
+# df_hikaru['win_black'] = df_hikaru.apply(
+#     lambda row: 1 if row['black_player_id'].lower() == 'hikaru' and row['win'] == 1 else 0,
+#     axis=1
+# )
+# # Overall win count
+# total_wins = df_hikaru['win_white'].sum() + df_hikaru['win_black'].sum()
 
-df_hikaru_win_black = df_hikaru[df_hikaru['win_black'] == 1]
-df_hikaru_loss_black = df_hikaru[df_hikaru['win_black'] == 0]
+# # Calculate the win rate relative to total games Hikaru played.
+# overall_win_rate = total_wins / total_hikaru_games if total_hikaru_games > 0 else 0
 
-# Plot rating distribution for wins and losses for White
-fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+# print(f"Hikaru's total wins: {total_wins}")
+# print(f"Hikaru's overall win rate: {overall_win_rate * 100:.2f}%")
 
-# Plot for wins as White
-sns.histplot(df_hikaru_win_white['white_rating'], kde=True, color='green', label="Wins as White", ax=axes[0], alpha=0.6)
-sns.histplot(df_hikaru_loss_white['white_rating'], kde=True, color='red', label="Losses as White", ax=axes[0], alpha=0.6)
-axes[0].set_title("Hikaru's Rating Distribution: Wins vs Losses (White)")
-axes[0].set_xlabel("Rating")
-axes[0].set_ylabel("Frequency")
-axes[0].legend()
+# # Separate dataframes for wins and losses for White and Black
+# df_hikaru_win_white = df_hikaru[df_hikaru['win_white'] == 1]
+# df_hikaru_loss_white = df_hikaru[df_hikaru['win_white'] == 0]
 
-# Plot for wins as Black
-sns.histplot(df_hikaru_win_black['black_rating'], kde=True, color='blue', label="Wins as Black", ax=axes[1], alpha=0.6)
-sns.histplot(df_hikaru_loss_black['black_rating'], kde=True, color='orange', label="Losses as Black", ax=axes[1], alpha=0.6)
-axes[1].set_title("Hikaru's Rating Distribution: Wins vs Losses (Black)")
-axes[1].set_xlabel("Rating")
-axes[1].set_ylabel("Frequency")
-axes[1].legend()
+# df_hikaru_win_black = df_hikaru[df_hikaru['win_black'] == 1]
+# df_hikaru_loss_black = df_hikaru[df_hikaru['win_black'] == 0]
 
-# Adjust layout
-plt.tight_layout()
-plt.show()
+# # Plot rating distribution for wins and losses for White
+# fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+
+# # Plot for wins as White
+# sns.histplot(df_hikaru_win_white['white_rating'], kde=True, color='green', label="Wins as White", ax=axes[0], alpha=0.6)
+# sns.histplot(df_hikaru_loss_white['white_rating'], kde=True, color='red', label="Losses as White", ax=axes[0], alpha=0.6)
+# axes[0].set_title("Hikaru's Rating Distribution: Wins vs Losses (White)")
+# axes[0].set_xlabel("Rating")
+# axes[0].set_ylabel("Frequency")
+# axes[0].legend()
+
+# # Plot for wins as Black
+# sns.histplot(df_hikaru_win_black['black_rating'], kde=True, color='blue', label="Wins as Black", ax=axes[1], alpha=0.6)
+# sns.histplot(df_hikaru_loss_black['black_rating'], kde=True, color='orange', label="Losses as Black", ax=axes[1], alpha=0.6)
+# axes[1].set_title("Hikaru's Rating Distribution: Wins vs Losses (Black)")
+# axes[1].set_xlabel("Rating")
+# axes[1].set_ylabel("Frequency")
+# axes[1].legend()
+
+# # Adjust layout
+# plt.tight_layout()
+# plt.show()
 
 # # Compare Win Rate for White and Black separately
 # fig, axes = plt.subplots(1, 2, figsize=(14, 6))

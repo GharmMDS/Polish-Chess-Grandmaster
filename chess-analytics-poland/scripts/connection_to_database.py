@@ -1,10 +1,13 @@
 import requests
+import json
+import os
+import time
+import sys
 import pandas as pd
 from sqlalchemy import create_engine
-import time
-import logging
-import re
 import datetime
+import re
+import logging
 from sqlalchemy.exc import IntegrityError
 
 # Set up logging
@@ -16,26 +19,23 @@ engine = create_engine(DB_URL)
 
 # Chess.com API settings
 HEADERS = {'User-Agent': 'QueenIsBeautiful (your_email@example.com)'}
-PLAYER = "hikaru"
-ARCHIVES_URL = f"https://api.chess.com/pub/player/{PLAYER}/games/archives"
 
 # Create an API session
 session = requests.Session()
 session.headers.update(HEADERS)
 
-
-def fetch_all_game_urls():
-    """Fetches all archive URLs for the player."""
+def fetch_all_game_urls(player_name):
+    """Fetches all archive URLs for the given player."""
+    ARCHIVES_URL = f"https://api.chess.com/pub/player/{player_name}/games/archives"
     try:
         response = session.get(ARCHIVES_URL)
         response.raise_for_status()
         archives = response.json().get("archives", [])
-        logging.info(f"Found {len(archives)} archives for player {PLAYER}")
+        logging.info(f"Found {len(archives)} archives for player {player_name}")
         return archives
     except requests.exceptions.RequestException as e:
-        logging.error(f"Failed to fetch archives: {e}")
+        logging.error(f"Failed to fetch archives for {player_name}: {e}")
         return []
-
 
 def fetch_games_data(archive_url):
     """Fetches game data from a single archive."""
@@ -47,32 +47,23 @@ def fetch_games_data(archive_url):
         logging.error(f"Error fetching games from {archive_url}: {e}")
         return []
 
-
 def extract_date_from_pgn(pgn):
     """Extracts the date (YYYY-MM-DD) from the PGN, handling case and varying digit counts."""
-    # Case-insensitive search for Date tag, allowing single or double digits for month/day
     date_match = re.search(
-        r'\[Date "(\d{4}\.\d{1,2}\.\d{1,2})"\]', 
-        pgn, 
+        r'\[Date "(\d{4}\.\d{1,2}\.\d{1,2})"\]',
+        pgn,
         re.IGNORECASE
     )
     if date_match:
         date_str = date_match.group(1)
         try:
-            # Parse date even if parts have single digits (e.g., 2023.5.7)
             date_obj = datetime.datetime.strptime(date_str, '%Y.%m.%d').date()
-            logging.info(f"Extracted date from PGN: {date_obj}")
             return date_obj.strftime('%Y-%m-%d')
         except ValueError as e:
             logging.warning(f"Invalid date '{date_str}' in PGN: {e}")
-            # Fallback to default date if parsing fails
     else:
         logging.warning("No Date tag found in PGN.")
-    
-    # Return a sensible default date instead of '2015-05-05'
-    default_date = '1900-01-01'
-    logging.warning(f"Defaulting to {default_date}")
-    return default_date
+    return '1900-01-01'
 
 def get_existing_game_ids():
     """Fetches existing game IDs from the database."""
@@ -82,22 +73,36 @@ def get_existing_game_ids():
         logging.error(f"Error fetching existing game IDs: {e}")
         return []
 
-
-
-
-def process_games():
-    """Fetches, processes, and stores new chess games."""
-    all_games_urls = fetch_all_game_urls()
+def process_player_games(player_name):
+    """Fetches, processes, and stores new chess games for a given player."""
+    logging.info(f"Processing games for player: {player_name}")
+    all_games_urls = fetch_all_game_urls(player_name)
     if not all_games_urls:
-        logging.warning("No game archives found.")
+        logging.warning(f"No game archives found for player {player_name}.")
         return
 
     existing_game_ids = set(get_existing_game_ids())
     new_games = []
 
+    # Directory to save game data
+    data_dir = os.path.join(os.getcwd(), player_name)
+    os.makedirs(data_dir, exist_ok=True)
+
     for games_url in all_games_urls:
+        # Check if the archive has already been downloaded
+        archive_filename = os.path.join(data_dir, f"{player_name}_games_{games_url.split('/')[-2]}_{games_url.split('/')[-1]}.json")
+        if os.path.exists(archive_filename):
+            logging.info(f"Archive {archive_filename} already downloaded, skipping...")
+            continue
+        
         logging.info(f"Fetching games from {games_url}...")
         games_data = fetch_games_data(games_url)
+
+        # Save the archive as a JSON file
+        if games_data:
+            with open(archive_filename, 'w', encoding='utf-8') as f:
+                json.dump(games_data, f, indent=4)
+            logging.info(f"Saved games data to {archive_filename}")
 
         for game in games_data:
             try:
@@ -111,12 +116,8 @@ def process_games():
                 white = game["white"]
                 black = game["black"]
                 winner = white["username"] if white["result"] == "win" else black["username"]
-                date_time = extract_date_from_pgn(game["pgn"])  # Ensure date_time is being extracted correctly
+                date_time = extract_date_from_pgn(game["pgn"])
 
-                # Log to make sure date_time is not null before insertion
-                logging.info(f"Date extracted for game {game_id}: {date_time}")
-
-                # Construct the game data
                 game_data = {
                     "game_id": game_id,
                     "white_player_id": white["username"],
@@ -129,9 +130,8 @@ def process_games():
                     "pgn": game["pgn"],
                     "start_time": datetime.datetime.fromtimestamp(game["end_time"]).strftime('%Y-%m-%d %H:%M:%S') if game.get("end_time") else None,
                     "winner": winner,
-                    "date_time": date_time  # Ensure date_time is assigned here
+                    "date_time": date_time
                 }
-
                 new_games.append(game_data)
 
             except KeyError as e:
@@ -140,24 +140,24 @@ def process_games():
         time.sleep(1)  # Rate limit delay
 
     if new_games:
-        # Log the number of new games before insertion
-        logging.info(f"Inserting {len(new_games)} new games into the database.")
-        
-        # Using to_sql method for simplicity here:
+        logging.info(f"Inserting {len(new_games)} new games for {player_name} into the database.")
         df = pd.DataFrame(new_games)
         try:
             df.to_sql('games', engine, if_exists='append', index=False)
-            logging.info(f"Inserted {len(new_games)} new games into the database.")
+            logging.info(f"Inserted {len(new_games)} new games for {player_name} into the database.")
         except IntegrityError as e:
-            logging.error(f"Integrity error inserting games: {e}")
+            logging.error(f"Integrity error inserting games for {player_name}: {e}")
         except Exception as e:
-            logging.error(f"Unexpected error inserting games: {e}")
+            logging.error(f"Unexpected error inserting games for {player_name}: {e}")
     else:
-        logging.warning("No new games to insert.")
-
-
-
-
+        logging.info(f"No new games to insert for {player_name}.")
 
 if __name__ == "__main__":
-    process_games()
+    if len(sys.argv) > 1:
+        player_to_fetch = sys.argv[1]
+        logging.info(f"Fetching data for player from command line: {player_to_fetch}")
+        process_player_games(player_to_fetch)
+    else:
+        player_to_fetch = input("Enter the Chess.com username to fetch data for: ").strip()
+        logging.info(f"Fetching data for player from user input: {player_to_fetch}")
+        process_player_games(player_to_fetch)
